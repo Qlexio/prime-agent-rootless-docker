@@ -1,0 +1,24 @@
+{
+  "providers": {
+    "<provider_name>": {
+      "baseUrl": "http://<api_server_ip>:<port>/v1",
+      "api": "openai-completions",
+      "apiKey": "sk-YOUR_API_KEY",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "supportsUsageInStreaming": false
+      },
+      "models": [
+        {
+          "id": "<AI_Provider>/<Model_Name>:<Quantization_if_any>",
+          "name": "<my_llm_custom_name>",
+          "input": ["text"],
+          "contextWindow": 16384,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}

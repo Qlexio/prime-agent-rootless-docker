@@ -24,7 +24,7 @@ else
 fi
 
 # --- Seed default config files (never overwrite) ---
-PRIME_CFG="${HOME}/.prime/agent"
+PRIME_CFG="${PRIME_CFG_DIR:-${HOME}/.prime/agent}"
 mkdir -p "${PRIME_CFG}"
 
 seed() {  # seed <file> <mode>

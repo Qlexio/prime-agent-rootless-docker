@@ -1,21 +1,24 @@
 {
+  "$schema": "https://pi.dev/schemas/models.schema.json",
   "providers": {
-    "<provider_name>": {
-      "baseUrl": "http://<api_server_ip>:<port>/v1",
+    "my-provider": {
+      "name": "My Provider",
+      "baseUrl": "https://api.example.com/v1",
       "api": "openai-completions",
-      "apiKey": "sk-YOUR_API_KEY",
+      "apiKey": "$MY_PROVIDER_API_KEY",
       "compat": {
-        "supportsDeveloperRole": false,
-        "supportsReasoningEffort": false,
-        "supportsUsageInStreaming": false
+        "supportsDeveloperRole": true,
+        "supportsReasoningEffort": true,
+        "supportsUsageInStreaming": true
       },
       "models": [
         {
-          "id": "<AI_Provider>/<Model_Name>:<Quantization_if_any>",
-          "name": "<my_llm_custom_name>",
+          "id": "vendor/model-name",
+          "name": "My Model",
+          "reasoning": true,
           "input": ["text"],
-          "contextWindow": 16384,
-          "maxTokens": 4096,
+          "contextWindow": 128000,
+          "maxTokens": 32768,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }
       ]

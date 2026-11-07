@@ -43,7 +43,7 @@ ENV UV_LINK_MODE=copy \
     PRIME_INSTALL_CMD=${PRIME_INSTALL_CMD}
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chmod=0755 prime-setup   /usr/local/bin/prime-setup
+COPY --chmod=0755 prime-setup.sh   /usr/local/bin/prime-setup
 # Defaults seeded on first run (read-only templates)
 COPY defaults/ /opt/prime-defaults/
 RUN chmod 644 /opt/prime-defaults/*

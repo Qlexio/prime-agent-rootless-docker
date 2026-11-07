@@ -37,9 +37,9 @@ RUN groupadd --gid ${AGENT_GID} ${AGENT_USER} \
 # --- uv defaults for the agent -----------------------------------------------
 ENV UV_LINK_MODE=copy \
     UV_CACHE_DIR=/home/${AGENT_USER}/.cache/uv \
-    PRIME_CFG_DIR=/home/${AGENT_USER}/.prime/agent \
-    VIRTUAL_ENV=${PRIME_CFG_DIR}/kernel-venv \
+    VIRTUAL_ENV=/home/${AGENT_USER}/.prime/agent/kernel-venv \
     PATH=/home/${AGENT_USER}/.local/bin:${PATH} \
+    PRIME_CFG_DIR=/home/${AGENT_USER}/.prime/agent \
     PRIME_INSTALL_CMD=${PRIME_INSTALL_CMD}
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh

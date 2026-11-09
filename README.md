@@ -53,6 +53,7 @@ To reach a locally hosted AI provider, run:
 docker run -d --name <container-name> \
   -v prime-home:/home/agent \
   -v prime-workspace:/workspace \
+  -e <MY_PROVIDER_API_KEY>=<$MY_PROVIDER_API_KEY> \
   --add-host host.docker.internal:host-gateway \
   <image_name>:<tag>
 ```
@@ -63,11 +64,21 @@ To reach an external AI provider, run:
 docker run -d --name <container-name> \
   -v prime-home:/home/agent \
   -v prime-workspace:/workspace \
+  -e <MY_PROVIDER_API_KEY>=<$MY_PROVIDER_API_KEY> \
   --network <my-custom-network> \
   <image_name><:tag>
 ```
 
+
 > **N.B.: \<container-name> litterally the name you choose to give to the container. It can be pretty much anything.**
+
+> **⚠️ N.B.: To set your *`API_KEY`* in a host environment variable:<\br>
+>
+> `$ export MY_PROVIDER_API_KEY="sk-..."`.<\br>
+>
+> MY_PROVIDER_API_KEY is not a fixed value as `prime-setup` will propose you to use a variable under this format:<\br>
+>
+> \<AI_PROVIDER_NAME>_API_KEY>
 
 At first launch, Prime Agent is installed and a to be filled in *models.json* is copied to **`~/.prime/agent/models.json`**.
 

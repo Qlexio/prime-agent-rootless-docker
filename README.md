@@ -1,24 +1,14 @@
-# Prime Agent - Unsloth
+# Prime Agent - Rootless Docker
 
 ---
 
-## Unsloth
+This repository aims to share an isolated Prime Agent running inside a rootless Docker container.
 
----
+Rootless Docker is the first filter; Docker's engine is run by a user daemon not thru the system-wide one.
 
-Run command:
+Prime Agent has its own IAM. It can run everything it needs with its own accesses but is bounded to its container if it tries to escape.
 
-```
-unsloth run \
-  --model unsloth/granite-4.1-3b-GGUF:UD-Q8_K_XL \
-  -H 0.0.0.0 \
-  -p 8888 \
-  --disable-tools
-```
-
-## Prime Agent - Docker
-
----
+## Docker's pre-requisites
 
 ### Build Prime Agent Docker image
 
@@ -28,6 +18,8 @@ docker build -t <image_name>:<tag> .
 ```
 
 ### Required volumes
+
+This docker image handles persistant memory locally stored, make sure to mount volumes.
 
 | Volume              | Mount           | Contents                                                                                                                  |
 | ------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -42,54 +34,56 @@ docker volume create prime-home
 docker volume prime-workspace
 ```
 
-### Run container
+### Docker network parameters
+
+To reach an ***external web AI provider***, the **MTU** needs to be changed to **`1500`** max like newer Docker versions tend to set higher MTU.
 
 ```
-docker run -d --name prime-agent \
+$ docker network create \
+  --driver=bridge \
+  --opt com.docker.network.driver.mtu=1400 \
+  <my-custom-net>
+```
+
+## Run container
+
+To reach a locally hosted AI provider, run:
+
+```
+docker run -d --name <container-name> \
   -v prime-home:/home/agent \
   -v prime-workspace:/workspace \
   --add-host host.docker.internal:host-gateway \
   <image_name>:<tag>
 ```
 
-### Helpful commands
+To reach an external AI provider, run:
 
 ```
-docker logs -f prime-agent                          # watch the first-launch install
-docker exec -it prime-agent bash                    # look around
-docker exec -it prime-agent <prime-agent command>   # start the agent
+docker run -d --name <container-name> \
+  -v prime-home:/home/agent \
+  -v prime-workspace:/workspace \
+  --network <my-custom-network> \
+  <image_name><:tag>
 ```
 
-### Models configuration
+> **N.B.: \<container-name> litterally the name you choose to give to the container. It can be pretty much anything.**
 
-Inside the container, add a `~/.prime/agent/models.json` file with the following:
+At first launch, Prime Agent is installed and a to be filled in *models.json* is copied to **`~/.prime/agent/models.json`**.
+
+## Set up a custom AI provider (Recommended)
+
+To easily set up a custom AI provider, either a local one or not, run:
 
 ```
-{
-  "providers": {
-    "unsloth-studio": {
-      "baseUrl": "http://<unsloth_server_ip>:<unsloth_server_port>/v1",
-      "api": "openai-completions",
-      "apiKey": "sk-unsloth-YOUR_KEY",
-      "compat": {
-        "supportsDeveloperRole": false,
-        "supportsReasoningEffort": false,
-        "supportsUsageInStreaming": false
-      },
-      "models": [
-        {
-          "id": "unsloth/granite-4.1-3b-GGUF:UD-Q8_K_XL",
-          "name": "My_local_LLM",
-          "input": ["text"],
-          "contextWindow": 16384,
-          "maxTokens": 4096,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-        }
-      ]
-    }
-  }
-}
+docker exec -it <container-name> prime-setup
 ```
+
+And answer to asked values to automatically fill in *`models.json`*.
+
+> **Known limitation: `prime-setup` can be run multiple times to set up new LLM and/or AI providers.</br>To add a new LLM from the same provider, input another name; e.g. *`my-provider-2`*.`</br>`Otherwise, the previous configuration will be erased.`</br>`You can use the same *API KEY* and API endpoint.**
+
+> ⚠️N.B.: *`prime-setup`* do not configure visualization yet. Simple add or replace **`image`** to **"input"** entry in `models.json`. Recent LLM can bypass a missing **`image`** by calling programmic tools like **Pillow**.
 
 > ⚠️ N.B.: `id` must match the served model exactly.
 
@@ -97,26 +91,45 @@ Inside the container, add a `~/.prime/agent/models.json` file with the following
 
 > ⚠️ N.B.: `"contextWindow"` must be the exact same value than  `--max-seq-length` if parameter passed to the server.
 
-### Chat completion test
+
+The complete list of `models.json` parameters in [pi.dev documentation](https://pi.dev/docs/latest/models-configuration).
+
+
+## Helpful commands
+
+```
+docker logs -f <container-name>                          # watch the first-launch install
+docker exec -it <container-name> bash                    # look around
+docker exec -it <container-name> prime-agent <command>   # start the agent
+```
+
+## Chat completion test
 
 Run:
 
 ```
-docker exec -it prime-agent curl http://<unsloth_server_ip>:<unsloth_server_port>/v1/chat/completions \
-    -H "Authorization: Bearer sk-unsloth-YOUR_KEY" \
-    -H "Content-Type: application/json" \
-    -d '{"messages": [{"role": "user", "content": "Hello"}], "stream": true}'
+docker exec <container-name> curl -X POST https://<server-ip:port>/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, world ?"
+      }
+    ]
+  }'
 ```
 
-> ⚠️ N.B.: Provide the exact same `model` than the one provided at container launch.
+> ⚠️ N.B.: Some AI provider requires the exact same `model` than the one provided at container launch.
 
+## Update Prime Agent
 
-### Update Prime Agent
-
-To update the OS inside the container, run:
+To update the container OS, run:
 
 ```
-docker exec -u root prime-agent apt update && apt upgrade
+docker exec -u root <container-name> apt update && apt upgrade
 ```
 
 > ⚠️ N.B.: Those changes disappear when the container is recreated. Rebuilding the image remains the durable path.
@@ -124,13 +137,13 @@ docker exec -u root prime-agent apt update && apt upgrade
 To update **`Prime Agent`**, run:
 
 ```
-docker exec prime-agent prime-agent update 
+docker exec <container-name> prime-agent update
 ```
 
 To display **`Prime Agent`** version:
 
 ```
-docker exec prime-agent prime-agent --version
+docker exec <container-name> prime-agent --version
 ```
 
 ## Prime Agent / User pair work

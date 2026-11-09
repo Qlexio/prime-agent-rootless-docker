@@ -6,6 +6,7 @@
       "baseUrl": "https://api.example.com/v1",
       "api": "openai-completions",
       "apiKey": "$MY_PROVIDER_API_KEY",
+      "authHeader": true,
       "compat": {
         "supportsDeveloperRole": true,
         "supportsReasoningEffort": true,

@@ -106,7 +106,8 @@ if [[ "$KMODE" == 2 ]]; then
     echo;
     [[ -n "$KEY_VALUE" ]] && break;
   done
-  API_KEY_FIELD="$KEY_VALUE"; ENVNAME=""
+  API_KEY_FIELD="$KEY_VALUE"
+  ENVNAME=""
 else
   while :; do
     ask ENVNAME "Variable name" "$ENV_DEFAULT"
@@ -123,54 +124,99 @@ fi
 ask_req URL "Base URL (e.g. http://192.168.1.10:8000)"
 URL="${URL%/}"
 
-probe() {
-  local h=();
-  [[ -n "$KEY_VALUE" ]] && h=(-H "Authorization: Bearer ${KEY_VALUE}")
-  curl -fsS --max-time 8 "${h[@]}" "$1/models" 2>/dev/null
+# ### Focus on one model; time to handle API connections specs ###
+# probe() {
+#   local h=();
+#   [[ -n "$KEY_VALUE" ]] && h=(-H "Authorization: Bearer ${KEY_VALUE}" -H "Content-Type: application/json")
+#   curl -fsS --max-time 8 "${h[@]}" "$1/models" 2>/dev/null
+# }
+
+# if [[ "$URL" == */v1 ]]; then
+#   CANDIDATES=("$URL" "${URL%/v1}");
+# else
+#   CANDIDATES=("$URL/v1" "$URL");
+# fi
+
+# BASE="$URL"; BODY=""; VERIFIED=0
+# for c in "${CANDIDATES[@]}"; do
+#   if BODY="$(probe "$c")"; then
+#     BASE="$c"; VERIFIED=1;
+#     break;
+#   fi
+# done
+
+# if (( VERIFIED )); then
+#   echo "Endpoint OK: ${BASE}"
+# else
+#   warn "Endpoint unverified (unreachable, wrong URL or key). Writing '${BASE}' as entered.";
+# fi
+# ###
+
+while :; do
+  read -rp "Model ID, as the server expects it (e.g. gpt-4.1 or unsloth/Qwen3-8B-GGUF:Q4_K_M): " MID
+  [[ -n "$MID" ]] && break
+  echo "  A model ID is required."
+done
+
+urlencode() {
+  python3 -c 'import sys,urllib.parse as u; print(u.quote(sys.argv[1], safe=""))' "$1"
 }
 
-if [[ "$URL" == */v1 ]]; then
-  CANDIDATES=("$URL" "${URL%/v1}");
-else
-  CANDIDATES=("$URL/v1" "$URL");
-fi
+# Prints the HTTP status; the body goes to $PROBE_BODY
+probe() {  # probe <url>
+  local h=(-H "Content-Type: application/json")
+  [[ -n "${KEY_VALUE:-}" ]] && h+=( -H "Authorization: Bearer ${KEY_VALUE}")
+  curl -sS --max-time 8 -o "$PROBE_BODY" -w '%{http_code}' "${h[@]}" "$1" 2>/dev/null || echo "000"
+}
 
-BASE="$URL"; BODY=""; VERIFIED=0
-for c in "${CANDIDATES[@]}"; do
-  if BODY="$(probe "$c")"; then
-    BASE="$c"; VERIFIED=1;
-    break;
+PROBE_BODY="$(mktemp)"; trap 'rm -f "$PROBE_BODY"' EXIT
+BASE="$URL"
+ENC_MID="$(urlencode "$MID")"
+VERIFIED=0; LAST_CODE=000
+
+for url in "${BASE}/models/${ENC_MID}" "${BASE}/v1/models/${ENC_MID}"; do
+  LAST_CODE="$(probe "$url")"
+  if [[ "$LAST_CODE" == 2* ]]; then
+    BASE="${url%/*/*}"
+    VERIFIED=1; echo "Model reachable: ${url}"; break
   fi
 done
 
-if (( VERIFIED )); then
-  echo "Endpoint OK: ${BASE}"
-else
-  warn "Endpoint unverified (unreachable, wrong URL or key). Writing '${BASE}' as entered.";
+if (( ! VERIFIED )); then
+  case "$LAST_CODE" in
+    401|403) echo "Server answered ${LAST_CODE}: the API key looks wrong." ;;
+    404)     echo "Server answered 404: unknown model ID, or this server has no /models/<id> route." ;;
+    000)     echo "No answer (server down, wrong URL or network)." ;;
+    *)       echo "Server answered ${LAST_CODE}." ;;
+  esac
+  read -rp "Save the configuration anyway? [y/N] " a
+  [[ "${a,,}" == y* ]] || die "Aborted."
 fi
 
 # ---------- 5. model ----------
-IDS=()
+# ### Focus on one model; time to handle API connections specs ###
+# IDS=()
 
-if (( VERIFIED )); then
-  mapfile -t IDS < <(printf '%s' "$BODY" | python3 -c '
-import json,sys
-for m in json.load(sys.stdin).get("data",[]): print(m["id"])' 2>/dev/null || true)
-fi
+# if (( VERIFIED )); then
+#   mapfile -t IDS < <(printf '%s' "$BODY" | python3 -c '
+# import json,sys
+# for m in json.load(sys.stdin).get("data",[]): print(m["id"])' 2>/dev/null || true)
+# fi
 
-if (( ${#IDS[@]} )); then
-  echo "Models available:"
-  for i in "${!IDS[@]}"; do
-    printf '  %2d) %s\n' $((i+1)) "${IDS[i]}";
-  done
-  ask_req MSEL "Model (number or id)"
-  if [[ "$MSEL" =~ ^[0-9]+$ ]] && (( MSEL >= 1 && MSEL <= ${#IDS[@]} )); then
-    MID="${IDS[MSEL-1]}";
-  else MID="$MSEL";
-  fi
-else
-  ask_req MID "Model ID"
-fi
+# if (( ${#IDS[@]} )); then
+#   echo "Models available:"
+#   for i in "${!IDS[@]}"; do
+#     printf '  %2d) %s\n' $((i+1)) "${IDS[i]}";
+#   done
+#   ask_req MSEL "Model (number or id)"
+#   if [[ "$MSEL" =~ ^[0-9]+$ ]] && (( MSEL >= 1 && MSEL <= ${#IDS[@]} )); then
+#     MID="${IDS[MSEL-1]}";
+#   else MID="$MSEL";
+#   fi
+# else
+#   ask_req MID "Model ID"
+# fi
+# ###
 
 ask MNAME "Model display name" "$MID"
 
@@ -239,7 +285,8 @@ provs[e["PID"]] = {
     "name": e["PNAME"],
     "baseUrl": e["BASE"],
     "api": "openai-completions",
-    "apiKey": e["APIKEY"],
+    "apiKey": f'!printenv {e["APIKEY"][1:]}',
+    "authHeader": True,
     "compat": {
         "supportsDeveloperRole": True,
         "supportsReasoningEffort": True,

@@ -8,6 +8,16 @@ Rootless Docker is the first filter; Docker's engine is run by a user daemon not
 
 Prime Agent has its own IAM. It can run everything it needs with its own accesses but is bounded to its container if it tries to escape.
 
+It was made to easily connect to custom LLM servers; understand not builtin AI providers.
+
+**Ollama**, **LLM Studio** and **vLLM** are natively supported.
+
+**llama.cpp**(-based) servers seems to run well too.
+
+Connection tests were made on:
+* [Unsloth](https://unsloth.ai/docs)
+* [Mammouth AI LLM provider](https://mammouth.ai)
+
 ## Docker's pre-requisites
 
 ### Build Prime Agent Docker image

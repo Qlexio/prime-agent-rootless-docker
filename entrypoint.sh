@@ -36,6 +36,6 @@ seed() {  # seed <file> <mode>
 }
 
 seed models.json 600   # contains an API key → owner-only
-seed AGENTS.md   644
+# seed AGENTS.md   644
 
 exec "$@"

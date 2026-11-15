@@ -181,6 +181,12 @@ git -c protocol.ext.allow=user clone \
   <myproject>
 ```
 
+> **⚠️ N.B.: Running `git -c protocol.ext.allow=user clone --recursive` is unsafe.
+>
+> *DO NOT* run it unless you know what you are doing!
+>
+> See *Security considerations* section below.
+
 ```bash
 # On the host, inside your local clone (one-time setup)
 git config protocol.ext.allow user

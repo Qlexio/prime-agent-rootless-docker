@@ -12,10 +12,10 @@ It was made to easily connect to custom LLM servers; understand not builtin AI p
 
 **Ollama**, **LLM Studio** and **vLLM** are natively supported.
 
-**llama.cpp**(-based) servers seems to run well too.
+**llama.cpp**(-based) servers seem to run well too.
 
 Connection tests were made on:
-* [Unsloth](https://unsloth.ai/docs)
+* [Unsloth](https://unsloth.ai/docs) (*llama.cpp* based server)
 * [Mammouth AI LLM provider](https://mammouth.ai)
 
 ## Docker's pre-requisites
@@ -81,13 +81,7 @@ docker run -d --name <container-name> \
 
 > **N.B.: \<container-name> litterally the name you choose to give to the container. It can be pretty much anything.**
 
-> **⚠️ N.B.: To set your *`API_KEY`* in a host environment variable:<\br>
->
-> `$ export MY_PROVIDER_API_KEY="sk-..."`.<\br>
->
-> MY_PROVIDER_API_KEY is not a fixed value as `prime-setup` will propose you to use a variable under this format:<\br>
->
-> \<AI_PROVIDER_NAME>_API_KEY>
+> **⚠️ N.B.: To set your *`API_KEY`* in a host environment variable:<br/>`$ export MY_PROVIDER_API_KEY="sk-..."`.<br/>MY_PROVIDER_API_KEY is not a fixed value as `prime-setup` will propose you to use a variable under this format:<br/><AI_PROVIDER_NAME>_API_KEY>**
 
 At first launch, Prime Agent is installed and a to be filled in *models.json* is copied to **`~/.prime/agent/models.json`**.
 
@@ -101,7 +95,7 @@ docker exec -it <container-name> prime-setup
 
 And answer to asked values to automatically fill in *`models.json`*.
 
-> **Known limitation: `prime-setup` can be run multiple times to set up new LLM and/or AI providers.</br>To add a new LLM from the same provider, input another name; e.g. *`my-provider-2`*.`</br>`Otherwise, the previous configuration will be erased.`</br>`You can use the same *API KEY* and API endpoint.**
+> **Known limitation: `prime-setup` can be run multiple times to set up new LLM and/or AI providers.<br/>To add a new LLM from the same provider, input another name; e.g. *`my-provider-2`*.`<br/>`Otherwise, the previous configuration will be erased.`<br/>`You can use the same *API KEY* and API endpoint.**
 
 > ⚠️N.B.: *`prime-setup`* do not configure visualization yet. Simple add or replace **`image`** to **"input"** entry in `models.json`. Recent LLM can bypass a missing **`image`** by calling programmic tools like **Pillow**.
 
@@ -166,12 +160,6 @@ docker exec <container-name> prime-agent --version
 
 ## Prime Agent / User pair work
 
----
-
-#######
-
-#TODO Run, test and/or complete
-
 **The git workflow:** the repo lives in the volume, and you sync with git **through `docker exec`**. There's no server, no exposed port and no permission juggling. Git's built-in `ext` transport does this:
 
 ```bash
@@ -181,11 +169,7 @@ git -c protocol.ext.allow=user clone \
   <myproject>
 ```
 
-> **⚠️ N.B.: Running `git -c protocol.ext.allow=user clone --recursive` is unsafe.
->
-> *DO NOT* run it unless you know what you are doing!
->
-> See *Security considerations* section below.
+> **⚠️ N.B.: Running `git -c protocol.ext.allow=user clone --recursive` is unsafe.<br/>*DO NOT* run it unless you know what you are doing!<br/>See *Security considerations* section below.**
 
 ```bash
 # On the host, inside your local clone (one-time setup)
@@ -249,5 +233,3 @@ git -c protocol.ext.allow=user push agent main
 * A **normal** fetch does not transfer Git hooks or `.git/config` into the host clone., so the agent cannot plant hooks or remotes in your host clone.
 
 **The remote URL is a command.** The `agent` remote runs `docker exec` on the host. Only add `ext::` remotes you wrote yourself, and never copy `ext::` URLs from untrusted sources.
-
-#######

@@ -36,6 +36,8 @@ seed() {  # seed <file> <mode>
 }
 
 seed models.json 600   # contains an API key → owner-only
+# Uncomment the line below to implement default custom AI Agent behaviors in every image build
+# "AGENTS.md" must be located in "/defaults" directory.
 # seed AGENTS.md   644
 
 exec "$@"

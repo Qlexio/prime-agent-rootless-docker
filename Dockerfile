@@ -20,9 +20,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         less nano procps \
     && rm -rf /var/lib/apt/lists/*
 
-# # --- uv (static binaries from the official image) ---------------------------
-# COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-
 # --- Remove Ubuntu user -----------------------------------------------------
 RUN userdel -r ubuntu 2>/dev/null || true
 
@@ -37,10 +34,8 @@ RUN groupadd --gid ${AGENT_GID} ${AGENT_USER} \
 # --- uv defaults for the agent -----------------------------------------------
 ENV UV_LINK_MODE=copy \
     UV_CACHE_DIR=/home/${AGENT_USER}/.cache/uv \
-    # VIRTUAL_ENV=/home/${AGENT_USER}/.prime/agent/kernel-venv \
     PATH=/home/${AGENT_USER}/.local/bin:${PATH} \
     PRIME_CFG_DIR=/home/${AGENT_USER}/.prime/agent \
-    # PRIME_AGENT_UV_BIN_DIR=/home/agent/.local/bin \
     PRIME_INSTALL_CMD=${PRIME_INSTALL_CMD}
 
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh

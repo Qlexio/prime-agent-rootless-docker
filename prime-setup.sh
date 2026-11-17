@@ -173,12 +173,6 @@ while :; do
   echo "  A model ID is required."
 done
 
-# while :; do
-#   read -rp "Model ID, as the server expects it (e.g. gpt-4.1 or unsloth/Qwen3-8B-GGUF:Q4_K_M): " MID
-#   [[ -n "$MID" ]] && break
-#   echo "  A model ID is required."
-# done
-
 echo "  Tip: increase it for local servers (first call loads the model), slow reasoning models or slow networks."
 ask_int TIMEOUT "Request timeout in seconds" 30
 

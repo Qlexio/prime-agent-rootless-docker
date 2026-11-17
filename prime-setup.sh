@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 # prime-setup: add an OpenAI-compatible provider to Prime Agent (Pi-based)
+#
+# Both `bash -n prime-setup.sh` and `shellcheck prime-setup.sh` ran well.
+# Tested against, everything passed as expected:
+# [X] External API provider -> detects openai-responses
+# [X] A llama.cpp server -> detects openai-responses
+# [X] Missing `/v1` in provider url
+# [X] A wrong key (401)
+# [X] A dead host (000)
+
 set -euo pipefail
 
 CFG_DIR="${PRIME_CFG_DIR:-${HOME}/.prime/agent}"
@@ -124,6 +133,12 @@ fi
 ask_req URL "Base URL (e.g. http://192.168.1.10:8000)"
 URL="${URL%/}"
 
+if [[ "$URL" == */v1 ]]; then
+  CANDIDATES=("$URL" "${URL%/v1}");
+else
+  CANDIDATES=("$URL/v1" "$URL");
+fi
+
 # ### Focus on one model; time to handle API connections specs ###
 # probe() {
 #   local h=();
@@ -153,44 +168,93 @@ URL="${URL%/}"
 # ###
 
 while :; do
-  read -rp "Model ID, as the server expects it (e.g. gpt-4.1 or unsloth/Qwen3-8B-GGUF:Q4_K_M): " MID
+  ask_req MID "Model ID, as the server expects it (e.g. gpt-4.1 or unsloth/Qwen3-8B-GGUF:Q4_K_M)"
   [[ -n "$MID" ]] && break
   echo "  A model ID is required."
 done
 
-urlencode() {
-  python3 -c 'import sys,urllib.parse as u; print(u.quote(sys.argv[1], safe=""))' "$1"
-}
+# while :; do
+#   read -rp "Model ID, as the server expects it (e.g. gpt-4.1 or unsloth/Qwen3-8B-GGUF:Q4_K_M): " MID
+#   [[ -n "$MID" ]] && break
+#   echo "  A model ID is required."
+# done
+
+echo "  Tip: increase it for local servers (first call loads the model), slow reasoning models or slow networks."
+ask_int TIMEOUT "Request timeout in seconds" 30
 
 # Prints the HTTP status; the body goes to $PROBE_BODY
-probe() {  # probe <url>
-  local h=(-H "Content-Type: application/json")
-  [[ -n "${KEY_VALUE:-}" ]] && h+=( -H "Authorization: Bearer ${KEY_VALUE}")
-  curl -sS --max-time 8 -o "$PROBE_BODY" -w '%{http_code}' "${h[@]}" "$1" 2>/dev/null || echo "000"
+probe() {  # probe <url> <json-body>
+  local code
+  code="$(
+    { [[ -n "${KEY_VALUE:-}" ]] && printf 'header = "Authorization: Bearer %s"\n' "$KEY_VALUE"; } |
+    curl -sS -K - --max-time "$TIMEOUT" -X POST -o "$PROBE_BODY" -w '%{http_code}' \
+        -H "Content-Type: application/json" -d "$2" "$1" 2>/dev/null || true
+  )"
+  echo "${code:-000}"
+}
+
+# Prints the server's error message (if any) from $PROBE_BODY
+server_msg() {
+  python3 - "$PROBE_BODY" <<'PY' 2>/dev/null || true
+import json, sys
+raw = open(sys.argv[1], errors="replace").read()
+try:
+    d = json.loads(raw)
+    e = d.get("error", d) if isinstance(d, dict) else d
+    msg = e.get("message") if isinstance(e, dict) else e
+    print(str(msg or raw)[:300])
+except Exception:
+    print(raw.strip()[:300])
+PY
 }
 
 PROBE_BODY="$(mktemp)"; trap 'rm -f "$PROBE_BODY"' EXIT
-BASE="$URL"
-ENC_MID="$(urlencode "$MID")"
-VERIFIED=0; LAST_CODE=000
 
-for url in "${BASE}/models/${ENC_MID}" "${BASE}/v1/models/${ENC_MID}"; do
-  LAST_CODE="$(probe "$url")"
-  if [[ "$LAST_CODE" == 2* ]]; then
-    BASE="${url%/*/*}"
-    VERIFIED=1; echo "Model reachable: ${url}"; break
-  fi
-done
+# JSON bodies built by Python so any model ID is safely escaped
+RESP_JSON="$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "input": "ping"}))' "$MID")"
+CHAT_JSON="$(python3 -c 'import json,sys; print(json.dumps({"model": sys.argv[1], "messages": [{"role": "user", "content": "ping"}]}))' "$MID")"
+
+BASE="$URL"
+API="openai-responses"          # default, also used when nothing is verified
+VERIFIED=0; LAST_CODE=000; LAST_URL=""
+
+echo
+echo "A test request (\"ping\") will be sent to check the URL, API key, model and API type."
+echo "It uses a very small amount of tokens (typically well under \$0.01)."
+if yesno "Send the test request?" Y; then
+  for b in "${CANDIDATES[@]}"; do
+    for api in openai-responses openai-completions; do
+      if [[ "$api" == openai-responses ]]; then
+        LAST_URL="${b}/responses";        body="$RESP_JSON"
+      else
+        LAST_URL="${b}/chat/completions"; body="$CHAT_JSON"
+      fi
+      LAST_CODE="$(probe "$LAST_URL" "$body")"
+      if [[ "$LAST_CODE" == 2* ]]; then
+        BASE="$b"; API="$api"; VERIFIED=1
+        echo "OK: ${LAST_URL} -> ${API}"
+        break 2
+      fi
+      [[ "$LAST_CODE" == 401 || "$LAST_CODE" == 403 ]] && break 2  # bad key: stop
+      [[ "$LAST_CODE" == 000 ]] && break 2                         # unreachable / timeout: stop
+    done
+  done
+else
+  LAST_CODE=skip
+fi
 
 if (( ! VERIFIED )); then
   case "$LAST_CODE" in
+    skip)    echo "Test skipped." ;;
     401|403) echo "Server answered ${LAST_CODE}: the API key looks wrong." ;;
-    404)     echo "Server answered 404: unknown model ID, or this server has no /models/<id> route." ;;
-    000)     echo "No answer (server down, wrong URL or network)." ;;
-    *)       echo "Server answered ${LAST_CODE}." ;;
+    000)     echo "No answer within ${TIMEOUT}s (server down, wrong URL, network, or timeout too short)." ;;
+    *)       echo "Server answered ${LAST_CODE} on ${LAST_URL}." ;;
   esac
-  read -rp "Save the configuration anyway? [y/N] " a
-  [[ "${a,,}" == y* ]] || die "Aborted."
+  if [[ "$LAST_CODE" != skip && "$LAST_CODE" != 000 ]]; then
+    msg="$(server_msg)"; [[ -n "$msg" ]] && echo "  Server says: ${msg}"
+  fi
+  echo "API type will default to: ${API}"
+  yesno "Save the configuration anyway?" Y || die "Aborted."
 fi
 
 # ---------- 5. model ----------
@@ -251,6 +315,7 @@ cat <<EOF
 
 Provider : ${PID} (${PNAME})
 Base URL : ${BASE} $( (( VERIFIED )) && echo "[verified]" || echo "[UNVERIFIED]")
+API      : ${API} $( (( VERIFIED )) && echo "[detected]" || echo "[default]")
 API key  : $( [[ -n "$ENVNAME" ]] && echo "\$${ENVNAME}" || echo "literal (hidden)")
 Model    : ${MID} (${MNAME})  ctx=${CTX} max=${MAXT} reasoning=$( ((REASONING)) && echo yes || echo no)
 Costs    : in=${C_IN} out=${C_OUT} cacheRead=${C_CR} cacheWrite=${C_CW}
@@ -262,7 +327,7 @@ yesno "Write ${MODELS}?" Y || { echo "Aborted, nothing written."; exit 0; }
 
 TMP="$(mktemp "${CFG_DIR}/.models.XXXXXX")"
 
-MODELS="$MODELS" TMP="$TMP" SCHEMA="$SCHEMA" PID="$PID" PNAME="$PNAME" BASE="$BASE" \
+MODELS="$MODELS" TMP="$TMP" SCHEMA="$SCHEMA" PID="$PID" PNAME="$PNAME" BASE="$BASE" API="$API" \
 APIKEY="$API_KEY_FIELD" MID="$MID" MNAME="$MNAME" CTX="$CTX" MAXT="$MAXT" REASONING="$REASONING" \
 C_IN="$C_IN" C_OUT="$C_OUT" C_CR="$C_CR" C_CW="$C_CW" python3 <<'PY'
 import json, os, sys
@@ -284,7 +349,7 @@ if ph and ph.get("baseUrl") == "https://api.example.com/v1":   # seeded placehol
 provs[e["PID"]] = {
     "name": e["PNAME"],
     "baseUrl": e["BASE"],
-    "api": "openai-completions",
+    "api": e["API"],
     "apiKey": f'!printenv {e["APIKEY"][1:]}',
     "authHeader": True,
     "compat": {
